@@ -6,15 +6,15 @@ pub mod normalised_message {
 
 	pub struct MmqpNormalisedMessage {
 		//original message field from Mmqp.message
-		message: String,
+		pub message: String,
 
 		//auto generated unique ID - 64 random bytes, will be sent as a base64 string
-		message_id: [u8; 64],
+		pub message_id: [u8; 64],
 
-		message_group_id: String,
-		received_time: u128,
-		available_time: u128,
-		receive_count: u32,
+		pub message_group_id: String,
+		pub received_time: u128,
+		pub available_time: u128,
+		pub receive_count: u32,
 	}
 
 	impl MmqpNormalisedMessage {
@@ -119,6 +119,7 @@ pub mod normalised_message {
 
 	pub trait Receivable {
 		fn normalise(&self) -> MmqpNormalisedMessage;
+		fn normalise_serialised(&self) ->  Box<[u8]>;
 	}
 
 	impl Receivable for MmqpMessage {
@@ -137,6 +138,10 @@ pub mod normalised_message {
 				//an implementation of this trait would increment this value when sentNormalised->normalised
 				receive_count: 0,
 			}
+		}
+
+		fn normalise_serialised(&self) -> Box<[u8]> {
+			self.normalise().serialise()
 		}
 	}
 

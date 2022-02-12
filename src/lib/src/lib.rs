@@ -3,6 +3,7 @@ mod tests;
 mod page_io;
 mod encoding;
 mod normalised_message;
+mod queue;
 
 extern crate core;
 

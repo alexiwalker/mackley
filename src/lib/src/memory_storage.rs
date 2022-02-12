@@ -53,9 +53,28 @@ pub mod queue_readers {
 				if self.next_write_buffer() == self.current_read_buffer {
 					let mut buffer = self.add_and_go_next();
 					buffer.push_value(value);
+
 				} else {
 					let mut buffer = self.go_next();
 					buffer.push_value(value);
+				}
+			}
+		}
+
+		pub fn push_raw(&mut self, value: Box<[u8]>) {
+			let mut buffer = self.buffers[self.current_write_buffer].lock().unwrap();
+			let size = value.len();
+			if buffer.has_capacity(size) {
+				buffer.push_raw(value);
+			} else {
+				drop(buffer);
+				if self.next_write_buffer() == self.current_read_buffer {
+					let mut buffer = self.add_and_go_next();
+					buffer.push_raw(value);
+
+				} else {
+					let mut buffer = self.go_next();
+					buffer.push_raw(value);
 				}
 			}
 		}
@@ -204,6 +223,10 @@ pub mod queue_readers {
 		pub fn push_value(&mut self, value: T) {
 			let bytes = value.serialise();
 			self.buffer.extend(bytes.to_vec());
+		}
+
+		pub fn push_raw(&mut self, value: Box<[u8]>) {
+			self.buffer.extend(value.to_vec());
 		}
 
 		pub fn has_capacity(&self, size: usize) -> bool {
