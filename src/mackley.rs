@@ -36,15 +36,13 @@ pub mod application {
             for stream in self.listener.incoming() {
                 let mut s = stream.unwrap();
                 println!("New connection: {}", s.peer_addr().unwrap());
-                s.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n")
-                    .unwrap();
-                s.flush().unwrap();
-                // let mut buffer = [0; 1024];
-                //
-                // s.read(&mut buffer).unwrap();
                 let data = Application::read_stream(&mut s);
 
                 let (bytes, size) = data;
+
+                if size ==0 {
+                    continue;
+                }
 
                 let req = lib::tcp_parse::tcp_parse::parse_tcp_request(bytes);
 
@@ -55,12 +53,20 @@ pub mod application {
                             queue.receive_message(message);
                         } else {
                             println!("Queue not found: {}", message.target_queue);
-                            s.write(
-                                format!(
-                                    "MMQP|0.1|R|QUEUE_NOT_FOUND|{}|{}",
-                                    message.target_queue, 0x00
-                                )
-                                .as_bytes(),
+
+                            // let mut _message:Vec<u8> = (b"MMQP|0.1|R|QUEUE_NOT_FOUND|").to_vec();
+                            //
+                            // _message.extend( message.target_queue.to_string().into_bytes());
+                            // _message.push( 0x00);
+
+
+
+                            s.write_all(
+                                    format!(
+                                        "MMQP|0.1|R|QUEUE_NOT_FOUND|{}|{}",
+                                        message.target_queue, 0x00
+                                    )
+                                    .as_bytes(),
                             )
                             .unwrap();
                             s.flush().unwrap();
@@ -77,8 +83,14 @@ pub mod application {
                     }
                     MmqpTcpFormat::Ping => {
                         println!("Ping");
-                        s.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\npong").unwrap();
-                        s.flush().unwrap();
+
+                        let success =s.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\npong");
+                        match success {
+                            Ok(_) => {
+                                s.flush();
+                            }
+                            Err(_) => {}
+                        }
                     }
                 }
             }
@@ -116,7 +128,8 @@ pub mod application {
                     }
 
                     _ => {
-                        println!("Error reading stream");
+                        println!("error reading stream");
+                        return (Vec::new(), 0);
                     }
                 }
 
