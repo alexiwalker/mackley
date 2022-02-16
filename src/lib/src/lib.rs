@@ -20,8 +20,13 @@ pub mod serialiser {
     use crate::encoding::encoding::MmqpEncoding;
     use std::borrow::BorrowMut;
 
+    pub enum SerialisationStrategy {
+        Wire,
+        Storage
+    }
+
     pub trait MmqpSerialisable {
-        fn serialise(&self) -> Box<[u8]>;
+        fn serialise(&self,strategy: SerialisationStrategy) -> Box<[u8]>;
         fn deserialise(message_binary: &mut Vec<u8>, cursor: &mut usize) -> Self;
         fn raw(message_binary: &mut Vec<u8>, cursor: &mut usize) -> Vec<u8>;
         fn get_size(&self) -> usize;
@@ -53,7 +58,7 @@ pub mod serialiser {
     }
 
     impl MmqpSerialisable for MmqpMessage {
-        fn serialise(&self) -> Box<[u8]> {
+        fn serialise(&self,strategy: SerialisationStrategy) -> Box<[u8]> {
             let pipe = b"|";
             let auth = b":";
             let mut message_binary: Vec<u8> = Vec::new();
@@ -92,11 +97,20 @@ pub mod serialiser {
 
             message_binary.push(0x00);
 
-            let size = message_binary.len();
-            let mut prefix = size.to_mmqp_binary().unwrap();
-            prefix.extend(message_binary);
 
-            prefix.into_boxed_slice()
+            return match strategy {
+                SerialisationStrategy::Wire => {
+                    message_binary.into_boxed_slice()
+                }
+                SerialisationStrategy::Storage => {
+                    let size = message_binary.len();
+                    let mut prefix = size.to_mmqp_binary().unwrap();
+                    prefix.extend(message_binary);
+                    prefix.into_boxed_slice()
+                }
+            }
+
+
         }
 
         fn deserialise(message_binary: &mut Vec<u8>, c: &mut usize) -> Self {

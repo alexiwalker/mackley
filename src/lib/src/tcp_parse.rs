@@ -1,6 +1,10 @@
+use crate::encoding::encoding::MmqpEncoding;
+use crate::tcp_parse::tcp_parse::MmqpTcpFormat;
+use crate::MmqpMessage;
+
 pub mod tcp_parse {
     use crate::encoding::encoding::MmqpEncoding;
-    use crate::{MmqpMessage, MmqpSerialisable};
+    use crate::{MmqpMessage, MmqpSerialisable, SerialisationStrategy};
     use std::any::Any;
     use std::net::TcpStream;
 
@@ -65,7 +69,7 @@ pub mod tcp_parse {
             message_group: "".to_string(),
         };
 
-        let bytes = message.serialise();
+        let bytes = message.serialise(SerialisationStrategy::Wire);
         let encl = bytes[0];
         //skip the number of bytes listed by encl
         let mut bytes = &bytes[1..];
@@ -94,6 +98,8 @@ pub mod tcp_parse {
         //todo figure out how to handle this, placeholder
         Admin,
 
+        // queue name, number of messages to recieve maximum
+        Poll(String, u8),
         // keepalive connection, duration, queue
         LongPoll(TcpStream, u32, String),
 
@@ -136,8 +142,29 @@ pub mod tcp_parse {
                 let message = parse_as_message(request.to_vec(), version_major, version_minor);
                 message
             }
+            "P" => {
+                let poll = parse_as_poll(request.to_vec());
+                poll
+            }
             _ => MmqpTcpFormat::Ping,
         };
+    }
+
+    fn parse_as_poll(request: Vec<u8>) -> MmqpTcpFormat {
+        let mut cursor = 0usize;
+        let _username: String = String::from_mmqp_binary(&request, &mut cursor);
+        // println!("{}", username);
+        cursor += 1;
+        let _password: String = String::from_mmqp_binary(&request, &mut cursor);
+        // println!("{}", password);
+        cursor += 1;
+        let target_queue: String = String::from_mmqp_binary(&request, &mut cursor);
+        // println!("{}", target_queue);
+        cursor += 1;
+        let receive_count: u8 = request[cursor];
+        // println!("{}", message);
+
+        MmqpTcpFormat::Poll(target_queue, receive_count as u8)
     }
 
     fn parse_as_message(request: Vec<u8>, version_major: u8, version_minor: u8) -> MmqpTcpFormat {
@@ -147,19 +174,19 @@ pub mod tcp_parse {
         // dbg!(version_major);
         // dbg!(version_minor);
 
-        println!("pre req: {:?}", request.clone());
+        // println!("pre req: {:?}", request.clone());
         let mut cursor = 0usize;
         let username: String = String::from_mmqp_binary(&request, &mut cursor);
-        println!("{}", username);
+        // println!("{}", username);
         cursor += 1;
         let password: String = String::from_mmqp_binary(&request, &mut cursor);
-        println!("{}", password);
+        // println!("{}", password);
         cursor += 1;
         let target_queue: String = String::from_mmqp_binary(&request, &mut cursor);
-        println!("{}", target_queue);
+        // println!("{}", target_queue);
         cursor += 1;
         let message: String = String::from_mmqp_binary(&request, &mut cursor);
-        println!("{}", message);
+        // println!("{}", message);
 
         MmqpTcpFormat::Message(MmqpMessage {
             version_major,

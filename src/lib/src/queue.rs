@@ -2,6 +2,7 @@ pub mod queue {
     use crate::memory_storage::queue_readers::RotatingReadBuffers;
     use crate::normalised_message::normalised_message::{MmqpNormalisedMessage, Receivable};
     use crate::serialiser::MmqpSerialisable;
+    use crate::SerialisationStrategy;
     use std::borrow::{Borrow, BorrowMut};
     use std::collections::{BTreeMap, HashMap};
     use std::net::TcpStream;
@@ -10,6 +11,12 @@ pub mod queue {
     #[test]
     fn compiles() {
         println!("compiles");
+    }
+
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct QueueConfiguration {
+        pub name: String,
+        pub pending_mode: PendingMode,
     }
 
     pub struct Queue {
@@ -34,33 +41,65 @@ pub mod queue {
     }
 
     impl Queue {
-        /**    getters  */
-        pub fn name(self) -> String {
-            self.queue_name
+        pub fn new(config: QueueConfiguration) -> Queue {
+            Queue {
+                queue_name: config.name,
+                approximate_message_count: 0,
+                pending_message_count: 0,
+                pending_mode: config.pending_mode,
+                readers: RotatingReadBuffers::new(16, 65536),
+                pending_sent: Default::default(),
+                pending_received: Default::default(),
+                long_poll_connections: vec![],
+            }
         }
 
-        pub fn approximate_message_count(self) -> u64 {
+        pub fn serialise_settings(self) -> String {
+            let config = QueueConfiguration {
+                name: self.queue_name,
+                pending_mode: self.pending_mode,
+            };
+
+            serde_json::to_string(&config).unwrap()
+        }
+
+        pub fn deserialise_config(settings: &str) -> QueueConfiguration {
+            serde_json::from_str(settings).unwrap()
+        }
+
+        pub fn deserialise_config_array(
+            settings: String,
+        ) -> Result<Box<[QueueConfiguration]>, serde_json::Error> {
+            serde_json::from_str(&*settings)
+        }
+
+        /**    getters  */
+        pub fn name(&self) -> String {
+            self.queue_name.clone()
+        }
+
+        pub fn approximate_message_count(&self) -> u64 {
             self.approximate_message_count
         }
 
-        pub fn pending_mode(self) -> PendingMode {
+        pub fn pending_mode(&self) -> PendingMode {
             self.pending_mode
         }
 
-        pub fn readers(self) -> RotatingReadBuffers<MmqpNormalisedMessage> {
-            self.readers
+        pub fn readers(&self) -> &RotatingReadBuffers<MmqpNormalisedMessage> {
+            &self.readers
         }
 
-        pub fn pending_sent(self) -> HashMap<String, MmqpNormalisedMessage> {
-            self.pending_sent
+        pub fn pending_sent(&self) -> &HashMap<String, MmqpNormalisedMessage> {
+            &self.pending_sent
         }
 
-        pub fn pending_received(self) -> BTreeMap<u128, Vec<MmqpNormalisedMessage>> {
-            self.pending_received
+        pub fn pending_received(&self) -> &BTreeMap<u128, Vec<MmqpNormalisedMessage>> {
+            &self.pending_received
         }
 
-        pub fn long_poll_connections(self) -> Vec<TcpStream> {
-            self.long_poll_connections
+        pub fn long_poll_connections(&self) -> &Vec<TcpStream> {
+            &self.long_poll_connections
         }
 
         /**    mutators */
@@ -87,7 +126,7 @@ pub mod queue {
                 return;
             }
 
-            let binary = norm.serialise();
+            let binary = norm.serialise(SerialisationStrategy::Storage);
 
             self.approximate_message_count += 1;
             readers.push_raw(binary);
@@ -151,6 +190,7 @@ pub mod queue {
         }
     }
 
+    #[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug)]
     pub enum PendingMode {
         Read,
         Push,

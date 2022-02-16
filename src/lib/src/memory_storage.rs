@@ -3,6 +3,7 @@ pub mod queue_readers {
     use std::borrow::BorrowMut;
     use std::marker::PhantomData;
     use std::sync::{Mutex, MutexGuard};
+    use crate::SerialisationStrategy;
 
     pub struct RotatingReadBuffers<T: MmqpSerialisable> {
         //wrap the buffer in a mutex
@@ -212,7 +213,7 @@ pub mod queue_readers {
         }
 
         pub fn push_value(&mut self, value: T) {
-            let bytes = value.serialise();
+            let bytes = value.serialise(SerialisationStrategy::Storage);
             self.buffer.extend(bytes.to_vec());
         }
 

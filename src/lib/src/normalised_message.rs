@@ -3,6 +3,7 @@ pub mod normalised_message {
     use crate::serialiser::{MmqpMessage, MmqpSerialisable};
     use std::borrow::BorrowMut;
     use std::time::SystemTime;
+    use crate::SerialisationStrategy;
 
     pub struct MmqpNormalisedMessage {
         //original message field from Mmqp.message
@@ -31,7 +32,7 @@ pub mod normalised_message {
     }
 
     impl MmqpSerialisable for MmqpNormalisedMessage {
-        fn serialise(&self) -> Box<[u8]> {
+        fn serialise(&self, strategy:SerialisationStrategy) -> Box<[u8]> {
             let mut message_binary: Vec<u8> = Vec::new();
             message_binary.extend(self.message_id);
             message_binary.extend(self.received_time.to_be_bytes());
@@ -41,12 +42,19 @@ pub mod normalised_message {
             message_binary.extend(self.message.to_mmqp_binary().unwrap());
             message_binary.push(0x00);
 
-            let s = message_binary.len();
-            let mut bytes = s.to_mmqp_binary().unwrap();
 
-            bytes.extend(message_binary);
+            return match strategy {
+                SerialisationStrategy::Wire => {
+                    message_binary.into_boxed_slice()
+                }
+                SerialisationStrategy::Storage => {
+                    let size = message_binary.len();
+                    let mut prefix = size.to_mmqp_binary().unwrap();
+                    prefix.extend(message_binary);
+                    prefix.into_boxed_slice()
+                }
+            }
 
-            bytes.into_boxed_slice()
         }
 
         fn deserialise(message_binary: &mut Vec<u8>, c: &mut usize) -> Self {
@@ -142,7 +150,7 @@ pub mod normalised_message {
         }
 
         fn normalise_serialised(&self) -> Box<[u8]> {
-            self.normalise().serialise()
+            self.normalise().serialise(SerialisationStrategy::Wire)
         }
     }
 }

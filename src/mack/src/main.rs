@@ -1,13 +1,12 @@
+use lib::{MmqpMessage, MmqpSerialisable, SerialisationStrategy};
 use std::env;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use lib::{MmqpMessage, MmqpSerialisable};
+use std::time::SystemTime;
 
 fn main() {
-
     //parse args: look or --host, --username and --password flags
     let args: Vec<String> = env::args().collect();
-
 
     dbg!(args.clone());
     //if no args, print help
@@ -20,24 +19,32 @@ fn main() {
         //if --host flag is present, set host to the next argument
         let mut host = "localhost";
         if args.contains(&String::from("--host")) {
-            let index = args.iter().position(|x| x == &String::from("--host")).unwrap();
+            let index = args
+                .iter()
+                .position(|x| x == &String::from("--host"))
+                .unwrap();
             host = &args[index + 1];
         }
 
         //if --username flag is present, set username to the next argument
         let mut username = "root";
         if args.contains(&String::from("--username")) {
-            let index = args.iter().position(|x| x == &String::from("--username")).unwrap();
+            let index = args
+                .iter()
+                .position(|x| x == &String::from("--username"))
+                .unwrap();
             username = &args[index + 1];
         }
 
         //if --password flag is present, set password to the next argument
         let mut password = "";
         if args.contains(&String::from("--password")) {
-            let index = args.iter().position(|x| x == &String::from("--password")).unwrap();
+            let index = args
+                .iter()
+                .position(|x| x == &String::from("--password"))
+                .unwrap();
             password = &args[index + 1];
         }
-
 
         dbg!(host);
         dbg!(username);
@@ -46,16 +53,17 @@ fn main() {
         let filepath = "./mack.toml";
 
         let mut file = std::fs::File::create(filepath).unwrap();
-        let config = format!("host = \"{}\"\nusername = \"{}\"\npassword = \"{}\"", host, username, password);
+        let config = format!(
+            "host = \"{}\"\nusername = \"{}\"\npassword = \"{}\"",
+            host, username, password
+        );
         file.write_all(config.as_bytes()).unwrap();
         println!("Config file written to {}", filepath);
 
-        return
-
+        return;
     }
 
     if args[1] == "send" {
-
         //next arg is the queue to send to
         let queue = &args[2];
 
@@ -67,7 +75,6 @@ fn main() {
         let mut host = "".to_string();
         let mut username = "".to_string();
         let mut password = "".to_string();
-
 
         dbg!(message.clone());
         dbg!(queue.clone());
@@ -86,59 +93,41 @@ fn main() {
                     }
                 }
 
-
-
-
-
                 //remove the learind and trailing " from the host, username and password
                 let host = host.trim_matches('"').to_string();
                 let username = username.trim_matches('"').to_string();
                 let password = password.trim_matches('"').to_string();
 
-                dbg!(host.clone());
-                dbg!(username.clone());
-                dbg!(password.clone());
+                // dbg!(host.clone());
+                // dbg!(username.clone());
+                // dbg!(password.clone());
 
-
-                let mut message_to_send:MmqpMessage = MmqpMessage::new();
+                let mut message_to_send: MmqpMessage = MmqpMessage::new();
 
                 message_to_send.message = message.to_string();
                 message_to_send.target_queue = queue.to_string();
-                message_to_send.version_major=0;
-                message_to_send.version_minor=1;
+                message_to_send.version_major = 0;
+                message_to_send.version_minor = 1;
                 message_to_send.username = username.to_string();
                 message_to_send.password = password.to_string();
-                let mut raw_message = message_to_send.serialise();
+                let raw_message = message_to_send.serialise(SerialisationStrategy::Wire);
 
-                let bytes_to_remove = raw_message[0];
-                //skip 1 byte
-                raw_message = Box::from(&raw_message[1..]);
+                let _stream = TcpStream::connect("127.0.0.1:8787");
 
-                //remove the length of the message
-                raw_message = Box::from(&raw_message[bytes_to_remove as usize..]);
+                let mut stream = _stream.unwrap();
 
+                stream.write_all(&raw_message).unwrap();
 
-
-                //sent the binary over tcp to the host
-
-                dbg!(raw_message.clone());
-                let mut stream = TcpStream::connect(host.clone()).unwrap();
-                stream.write(&raw_message).unwrap();
                 let res = &mut String::new();
+
                 stream.read_to_string(res).unwrap();
-                dbg!(res);
             }
             Err(_) => {
-                println!( "Error reading config file {}. Could not send message", filepath);
+                println!(
+                    "Error reading config file {}. Could not send message",
+                    filepath
+                );
             }
         }
-
-
-
     }
-
-
-
-
-
-    }
+}
